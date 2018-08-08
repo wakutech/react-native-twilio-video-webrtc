@@ -91,11 +91,17 @@ public class CustomTwilioVideoView extends View implements LifecycleEventListene
             Events.ON_PARTICIPANT_CONNECTED,
             Events.ON_PARTICIPANT_DISCONNECTED,
             Events.ON_PARTICIPANT_ADDED_VIDEO_TRACK,
+            Events.ON_PARTICIPANT_ADDED_DATA_TRACK,
+            Events.ON_PARTICIPANT_REMOVED_DATA_TRACK,
+            Events.ON_PARTICIPANT_PUBLISHED_DATA_TRACK,
+            Events.ON_PARTICIPANT_UNPUBLISHED_DATA_TRACK,
             Events.ON_PARTICIPANT_REMOVED_VIDEO_TRACK,
             Events.ON_PARTICIPANT_ENABLED_VIDEO_TRACK,
             Events.ON_PARTICIPANT_DISABLED_VIDEO_TRACK,
             Events.ON_PARTICIPANT_ENABLED_AUDIO_TRACK,
             Events.ON_PARTICIPANT_DISABLED_AUDIO_TRACK,
+            Events.ON_REMOTE_DATA_TRACK_DID_RECEIVE_STRING,
+            Events.ON_REMOTE_DATA_TRACK_DID_RECEIVE_DATA,
             Events.ON_STATS_RECEIVED})
     public @interface Events {
         String ON_CAMERA_SWITCHED = "onCameraSwitched";
@@ -107,11 +113,17 @@ public class CustomTwilioVideoView extends View implements LifecycleEventListene
         String ON_PARTICIPANT_CONNECTED = "onRoomParticipantDidConnect";
         String ON_PARTICIPANT_DISCONNECTED = "onRoomParticipantDidDisconnect";
         String ON_PARTICIPANT_ADDED_VIDEO_TRACK = "onParticipantAddedVideoTrack";
+        String ON_PARTICIPANT_ADDED_DATA_TRACK = "onParticipantAddedDataTrack";
+        String ON_PARTICIPANT_REMOVED_DATA_TRACK = "onParticipantRemovedDataTrack";
+        String ON_PARTICIPANT_PUBLISHED_DATA_TRACK = "onParticipantPublishedDataTrack";
+        String ON_PARTICIPANT_UNPUBLISHED_DATA_TRACK = "onParticipantUnpublishedDataTrack";
         String ON_PARTICIPANT_REMOVED_VIDEO_TRACK = "onParticipantRemovedVideoTrack";
         String ON_PARTICIPANT_ENABLED_VIDEO_TRACK = "onParticipantEnabledVideoTrack";
         String ON_PARTICIPANT_DISABLED_VIDEO_TRACK = "onParticipantDisabledVideoTrack";
         String ON_PARTICIPANT_ENABLED_AUDIO_TRACK = "onParticipantEnabledAudioTrack";
         String ON_PARTICIPANT_DISABLED_AUDIO_TRACK = "onParticipantDisabledAudioTrack";
+        String ON_REMOTE_DATA_TRACK_DID_RECEIVE_STRING = "onRemoteDataTrackDidReceiveString";
+        String ON_REMOTE_DATA_TRACK_DID_RECEIVE_DATA = "onRemoteDataTrackDidReceiveData";
         String ON_STATS_RECEIVED = "onStatsReceived";
     }
 
@@ -132,6 +144,7 @@ public class CustomTwilioVideoView extends View implements LifecycleEventListene
      */
     private static VideoView thumbnailVideoView;
     private static LocalVideoTrack localVideoTrack;
+    private static LocalDataTrack localDataTrack;
 
     private static CameraCapturer cameraCapturer;
     private LocalAudioTrack localAudioTrack;
@@ -144,6 +157,7 @@ public class CustomTwilioVideoView extends View implements LifecycleEventListene
     public CustomTwilioVideoView(ThemedReactContext context) {
         super(context);
         this.themedReactContext = context;
+        this.localDataTrack = LocalDataTrack.create(context);
         this.eventEmitter = themedReactContext.getJSModule(RCTEventEmitter.class);
 
         // add lifecycle for onResume and on onPause
@@ -324,6 +338,10 @@ public class CustomTwilioVideoView extends View implements LifecycleEventListene
 
         if (localVideoTrack != null) {
             connectOptionsBuilder.videoTracks(Collections.singletonList(localVideoTrack));
+        }
+
+        if (localDataTrack != null) {
+            connectOptionsBuilder.dataTracks(Collections.singletonList(localDataTrack));
         }
 
         room = Video.connect(getContext(), connectOptionsBuilder.build(), roomListener());
@@ -535,6 +553,9 @@ public class CustomTwilioVideoView extends View implements LifecycleEventListene
             @Override
             public void onConnected(Room room) {
                 localParticipant = room.getLocalParticipant();
+                if (this.localDataTrack != null) {
+                    localParticipant.publish(localDataTrack);
+                }
                 WritableMap event = new WritableNativeMap();
                 event.putString("room", room.getName());
                 List<RemoteParticipant> participants = room.getRemoteParticipants();
@@ -621,6 +642,7 @@ public class CustomTwilioVideoView extends View implements LifecycleEventListene
          * Start listening for participant media events
          */
         participant.setListener(mediaListener());
+        participant.setListener(dataTrackListener());
     }
 
     /*
@@ -743,6 +765,22 @@ public class CustomTwilioVideoView extends View implements LifecycleEventListene
         };
     }
 
+    private RemoteParticipant.Listener dataTrackListener() {
+        return new RemoteParticipant.Listener() {
+            @Override
+            public void onMessage(String message) {
+                WritableMap event = buildDataTrackStringEvent(message);
+                pushEvent(CustomTwilioVideoView.this, ON_REMOTE_DATA_TRACK_DID_RECEIVE_STRING, event);
+            }
+
+            @Override
+            public void onMessage(ByteBuffer message) {
+                WritableMap event = buildDataTrackDataEvent(getString(message));
+                pushEvent(CustomTwilioVideoView.this, ON_REMOTE_DATA_TRACK_DID_RECEIVE_DATA, event);
+            }
+        };
+    }
+
     private WritableMap buildParticipant(Participant participant) {
         WritableMap participantMap = new WritableNativeMap();
         participantMap.putString("identity", participant.getIdentity());
@@ -762,6 +800,18 @@ public class CustomTwilioVideoView extends View implements LifecycleEventListene
         event.putMap("participant", participantMap);
         event.putMap("track", trackMap);
         return event;
+    }
+
+    private WriteMap buildDataTrackEvent(String message) {
+        WritableMap event = new WritableNativeMap();
+        event.putMap("message", message);
+        return event;
+    }
+
+    private String getString(ByteBuffer byteBuffer) {
+        byte[] byteArray = new byte[byteBuffer.remaining()];
+        byteBuffer.get(byteArray);
+        return new String(byteArray);
     }
 
     private void addParticipantVideo(Participant participant, RemoteVideoTrackPublication publication) {
