@@ -57,6 +57,31 @@ const propTypes = {
   onParticipantAddedVideoTrack: PropTypes.func,
 
   /**
+   * Called when a data track has been removed
+   *
+   * @param {{participant, track}}
+   */
+  onParticipantAddedDataTrack: PropTypes.func,
+  /**
+   * Called when a data track has been removed
+   *
+   * @param {{participant, track}}
+   */
+  onParticipantRemovedDataTrack: PropTypes.func,
+  /**
+   * Called when a data track has been published
+   *
+   * @param {{participant, track}}
+   */
+  onParticipantPublishedDataTrack: PropTypes.func,
+  /**
+   * Called when a audio track has been unpublished
+   *
+   * @param {{participant, track}}
+   */
+  onParticipantUnpublishedDataTrack: PropTypes.func,
+
+  /**
    * Called when a video track has been removed
    *
    * @param {{participant, track}}
@@ -96,6 +121,18 @@ const propTypes = {
    * @param {{participant, track}}
    */
   onParticipantDisabledAudioTrack: PropTypes.func,
+  /**
+   * Called when an data track has been received.
+   *
+   * @param {{remoteDataTrack, message}}
+   */
+  onRemoteDataTrackDidReceiveString: PropTypes.func,
+  /**
+   * Called when an data track has been received.
+   *
+   * @param {{remoteDataTrack, message}}
+   */
+  onRemoteDataTrackDidReceiveData: PropTypes.func,
   /**
    * Callback that is called when stats are received (after calling getStats)
    */
@@ -167,12 +204,18 @@ class CustomTwilioVideoView extends Component {
       'onRoomDidDisconnect',
       'onParticipantAddedVideoTrack',
       'onParticipantRemovedVideoTrack',
+      'onParticipantAddedDataTrack',
+      'onParticipantRemovedDataTrack',
+      'onParticipantPublishedDataTrack',
+      'onParticipantUnpublishedDataTrack',
       'onRoomParticipantDidConnect',
       'onRoomParticipantDidDisconnect',
       'onParticipantEnabledVideoTrack',
       'onParticipantDisabledVideoTrack',
       'onParticipantEnabledAudioTrack',
       'onParticipantDisabledAudioTrack',
+      'onRemoteDataTrackDidReceiveString',
+      'onRemoteDataTrackDidReceiveData',
       'onStatsReceived'
     ].reduce((wrappedEvents, eventName) => {
       if (this.props[eventName]) {
