@@ -28,6 +28,7 @@ import com.facebook.react.uimanager.events.RCTEventEmitter;
 import com.twilio.video.BaseTrackStats;
 import com.twilio.video.CameraCapturer;
 import com.twilio.video.ConnectOptions;
+import com.twilio.video.EncodingParameters;
 import com.twilio.video.LocalParticipant;
 import com.twilio.video.LocalDataTrack;
 import com.twilio.video.LocalAudioTrack;
@@ -335,6 +336,8 @@ public class CustomTwilioVideoView extends View implements LifecycleEventListene
          */
         setAudioFocus(true);
         ConnectOptions.Builder connectOptionsBuilder = new ConnectOptions.Builder(this.accessToken);
+
+        connectOptionsBuilder.encodingParameters(new EncodingParameters(20000, 40000));
 
         if (this.roomName != null) {
             connectOptionsBuilder.roomName(this.roomName);

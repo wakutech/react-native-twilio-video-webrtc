@@ -284,6 +284,7 @@ RCT_EXPORT_METHOD(connect:(NSString *)accessToken roomName:(NSString *)roomName)
         builder.dataTracks = @[self.localDataTrack];
     }
 
+    builder.encodingParameters = [[TVIEncodingParameters alloc] initWithAudioBitrate:20000 videoBitrate:40000];
     builder.roomName = roomName;
   }];
 
