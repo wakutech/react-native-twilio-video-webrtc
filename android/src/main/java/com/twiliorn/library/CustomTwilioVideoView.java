@@ -322,12 +322,7 @@ public class CustomTwilioVideoView extends View implements LifecycleEventListene
 
         Log.i("CustomTwilioVideoView", "Starting connect flow");
 
-        if (cameraCapturer == null) {
-            createLocalMedia();
-        } else {
-            localAudioTrack = LocalAudioTrack.create(getContext(), true);
-            connectToRoom();
-        }
+        createLocalMedia();
     }
 
     public void connectToRoom() {
