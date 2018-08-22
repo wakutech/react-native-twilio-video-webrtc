@@ -20,22 +20,29 @@ static NSString* participantAddedVideoTrack   = @"participantAddedVideoTrack";
 static NSString* participantRemovedVideoTrack = @"participantRemovedVideoTrack";
 static NSString* participantAddedAudioTrack   = @"participantAddedAudioTrack";
 static NSString* participantRemovedAudioTrack = @"participantRemovedAudioTrack";
+static NSString* participantAddedDataTrack         = @"participantAddedDataTrack";
+static NSString* participantRemovedDataTrack       = @"participantRemovedDataTrack";
+static NSString* participantPublishedDataTrack     = @"participantPublishedDataTrack";
+static NSString* participantUnpublishedDataTrack   = @"participantUnpublishedDataTrack";
 static NSString* participantEnabledVideoTrack      = @"participantEnabledVideoTrack";
 static NSString* participantDisabledVideoTrack     = @"participantDisabledVideoTrack";
 static NSString* participantEnabledAudioTrack      = @"participantEnabledAudioTrack";
 static NSString* participantDisabledAudioTrack     = @"participantDisabledAudioTrack";
+static NSString* remoteDataTrackDidReceiveString   = @"remoteDataTrackDidReceiveString";
+static NSString* remoteDataTrackDidReceiveData     = @"remoteDataTrackDidReceiveData";
 
 static NSString* cameraDidStart               = @"cameraDidStart";
 static NSString* cameraWasInterrupted         = @"cameraWasInterrupted";
 static NSString* cameraDidStopRunning         = @"cameraDidStopRunning";
 static NSString* statsReceived                = @"statsReceived";
 
-@interface RCTTWVideoModule () <TVIRemoteParticipantDelegate, TVIRoomDelegate, TVICameraCapturerDelegate>
+@interface RCTTWVideoModule () <TVIRemoteParticipantDelegate, TVIRoomDelegate, TVICameraCapturerDelegate, TVIRemoteDataTrackDelegate>
 
 @property (strong, nonatomic) TVICameraCapturer *camera;
 @property (strong, nonatomic) TVIScreenCapturer *screen;
 @property (strong, nonatomic) TVILocalVideoTrack* localVideoTrack;
 @property (strong, nonatomic) TVILocalAudioTrack* localAudioTrack;
+@property (strong, nonatomic) TVILocalDataTrack* localDataTrack;
 @property (strong, nonatomic) TVIRoom *room;
 
 @end
@@ -61,10 +68,16 @@ RCT_EXPORT_MODULE();
     participantRemovedVideoTrack,
     participantAddedAudioTrack,
     participantRemovedAudioTrack,
+    participantAddedDataTrack,
+    participantRemovedDataTrack,
+    participantPublishedDataTrack,
+    participantUnpublishedDataTrack,
     participantEnabledVideoTrack,
     participantDisabledVideoTrack,
     participantEnabledAudioTrack,
     participantDisabledAudioTrack,
+    remoteDataTrackDidReceiveString,
+    remoteDataTrackDidReceiveData,
     cameraDidStopRunning,
     cameraDidStart,
     cameraWasInterrupted,
@@ -73,6 +86,7 @@ RCT_EXPORT_MODULE();
 }
 
 - (void)addLocalView:(TVIVideoView *)view {
+  self.localDataTrack = [TVILocalDataTrack track];
   [self.localVideoTrack addRenderer:view];
   if (self.camera && self.camera.source == TVICameraCaptureSourceBackCameraWide) {
     view.mirror = NO;
@@ -266,6 +280,10 @@ RCT_EXPORT_METHOD(connect:(NSString *)accessToken roomName:(NSString *)roomName)
       builder.audioTracks = @[self.localAudioTrack];
     }
 
+    if (self.localDataTrack) {
+        builder.dataTracks = @[self.localDataTrack];
+    }
+
     builder.encodingParameters = [[TVIEncodingParameters alloc] initWithAudioBitrate:20000 videoBitrate:40000];
     builder.roomName = roomName;
   }];
@@ -311,6 +329,9 @@ RCT_EXPORT_METHOD(disconnect) {
     [participants addObject:[p toJSON]];
   }
   TVILocalParticipant *localParticipant = room.localParticipant;
+  if (self.localDataTrack) {
+      [localParticipant publishDataTrack:self.localDataTrack];
+  }
   [participants addObject:[localParticipant toJSON]];
 
   [self sendEventWithName:roomDidConnect body:@{ @"roomName" : room.name , @"participants" : participants }];
@@ -369,6 +390,23 @@ RCT_EXPORT_METHOD(disconnect) {
     [self sendEventWithName:participantRemovedAudioTrack body:@{ @"participant": [participant toJSON], @"track": [publication toJSON] }];
 }
 
+- (void)subscribedToDataTrack:(TVIRemoteDataTrack *)dataTrack publication:(TVIRemoteDataTrackPublication *)publication forParticipant:(TVIRemoteParticipant *)participant {
+    [self sendEventWithName:participantAddedDataTrack body:@{ @"participant": [participant toJSON], @"track": [publication toJSON] }];
+    dataTrack.delegate = self;
+}
+
+- (void)unsubscribedFromDataTrack:(TVIRemoteDataTrack *)dataTrack publication:(TVIRemoteDataTrackPublication *)publication forParticipant:(TVIRemoteParticipant *)participant {
+    [self sendEventWithName:participantRemovedDataTrack body:@{ @"participant": [participant toJSON], @"track": [publication toJSON] }];
+}
+
+- (void)remoteParticipant:(TVIRemoteParticipant *)participant publishedDataTrack:(TVIRemoteDataTrackPublication *)publication {
+    [self sendEventWithName:participantPublishedDataTrack body:@{ @"participant": [participant toJSON], @"track": [publication toJSON] }];
+}
+
+- (void)remoteParticipant:(TVIRemoteParticipant *)participant unpublishedDataTrack:(TVIRemoteDataTrackPublication *)publication {
+    [self sendEventWithName:participantUnpublishedDataTrack body:@{ @"participant": [participant toJSON], @"track": [publication toJSON] }];
+}
+
 - (void)remoteParticipant:(TVIRemoteParticipant *)participant enabledVideoTrack:(TVIRemoteVideoTrackPublication *)publication {
   [self sendEventWithName:participantEnabledVideoTrack body:@{ @"participant": [participant toJSON], @"track": [publication toJSON] }];
 }
@@ -383,6 +421,18 @@ RCT_EXPORT_METHOD(disconnect) {
 
 - (void)remoteParticipant:(TVIRemoteParticipant *)participant disabledAudioTrack:(TVIRemoteAudioTrackPublication *)publication {
     [self sendEventWithName:participantDisabledAudioTrack body:@{ @"participant": [participant toJSON], @"track": [publication toJSON] }];
+}
+
+
+
+# pragma mark - TVIRemoteDataTrackDelegate
+
+- (void)remoteDataTrack:(TVIRemoteDataTrack *)remoteDataTrack didReceiveString:(nonnull NSString *)message {
+    [self sendEventWithName:remoteDataTrackDidReceiveString body:@{ @"remoteDataTrack": [remoteDataTrack sid], @"message": message }];
+}
+
+- (void)remoteDataTrack:(nonnull TVIRemoteDataTrack *)remoteDataTrack didReceiveData:(nonnull NSData *)message {
+    [self sendEventWithName:remoteDataTrackDidReceiveData body:@{ @"remoteDataTrack": [remoteDataTrack sid], @"message": [[NSString alloc] initWithData:message encoding:NSUTF8StringEncoding] }];
 }
 
 // TODO: Local participant delegates
